@@ -24,3 +24,7 @@ Then:
       -r="127.0.0.1:53": Resolver to test against
       -random=false: Use random Request Identifiers for each query
       -v=false: Verbose logging
+
+Example:
+
+![GIF animation](example.gif)
