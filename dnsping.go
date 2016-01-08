@@ -59,14 +59,21 @@ func main() {
 	}
 
 	targetDomain := flag.Args()[0]
+
 	fmt.Printf("Pinging resolver %s with domain %s\n", resolver, targetDomain)
 
+	// We need an actual FQDN with a trailing dot
+	if targetDomain[len(targetDomain)-1] != '.' {
+		targetDomain += "."
+	}
+
 	sent, errors := pinguer(targetDomain)
+
 	fmt.Printf(
 		"Statistics: %d requests sent, %d received (%.0f%% error)\n",
 		sent,
 		sent-errors,
-		float64(errors)/float64(sent),
+		100*float64(errors)/float64(sent),
 	)
 }
 
