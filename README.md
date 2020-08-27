@@ -27,4 +27,4 @@ Then:
 
 Example:
 
-![GIF animation](example.gif)
+![DNSPing demo](demo.svg)
