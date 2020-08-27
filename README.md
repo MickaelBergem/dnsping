@@ -9,11 +9,14 @@ displays the time needed to get the reply.
 
 First:
 
-    go build
+```bash
+go get github.com/MickaelBergem/dnsping
+# Provided you have configured your PATH to include $GOPATH/bin:
+dnsping -help
+```
 
-Then:
+You should get the following output:
 
-    ./dnsping
     dnsping - monitor response time for DNS servers
     Send DNS requests periodically to monitor a DNS server response time.
 
