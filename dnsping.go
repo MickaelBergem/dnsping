@@ -4,12 +4,14 @@ import (
 	"crypto/rand"
 	"flag"
 	"fmt"
-	"github.com/miekg/dns"
 	"math/big"
 	"net"
 	"os"
 	"strings"
 	"time"
+
+	"github.com/logrusorgru/aurora"
+	"github.com/miekg/dns"
 )
 
 // Runtime options
@@ -58,16 +60,22 @@ func main() {
 		os.Exit(1)
 	}
 
+	parsedResolver, err := ParseIPPort(resolver)
+	if err != nil {
+		fmt.Println(aurora.Sprintf(aurora.Red("%s (%s)"), "Unable to parse the resolver address", err))
+		os.Exit(2)
+	}
+
 	targetDomain := flag.Args()[0]
 
-	fmt.Printf("Pinging resolver %s with domain %s\n", resolver, targetDomain)
+	fmt.Printf("Pinging resolver %s with domain %s\n", parsedResolver, targetDomain)
 
 	// We need an actual FQDN with a trailing dot
 	if targetDomain[len(targetDomain)-1] != '.' {
 		targetDomain += "."
 	}
 
-	sent, errors := pinguer(targetDomain)
+	sent, errors := pinger(parsedResolver, targetDomain)
 
 	fmt.Printf(
 		"Statistics: %d requests sent, %d received (%.0f%% error)\n",
@@ -77,7 +85,7 @@ func main() {
 	)
 }
 
-func pinguer(domain string) (int, int) {
+func pinger(resolver string, domain string) (int, int) {
 
 	// Every N steps, we will tell the stats module how many requests we sent
 	maxRequestID := big.NewInt(65536)
@@ -101,7 +109,7 @@ func pinguer(domain string) (int, int) {
 		}
 
 		start := time.Now()
-		err := dnsExchange(resolver, message)
+		response, err := dnsExchange(resolver, message)
 		elapsedMilliSeconds := float64(time.Since(start)) / float64(time.Millisecond)
 
 		if err != nil {
@@ -109,18 +117,30 @@ func pinguer(domain string) (int, int) {
 				fmt.Printf("%s error: % (%s)\n", domain, err, resolver)
 			}
 			errors++
+
+			fmt.Printf(
+				aurora.Sprintf("ping %s with %s %s: %s after %.3fms (%s)\n",
+					resolver,
+					dns.TypeToString[questionRecord],
+					domain,
+					aurora.Red("error"),
+					elapsedMilliSeconds,
+					aurora.Faint(err),
+				),
+			)
+		} else {
+			fmt.Printf(
+				aurora.Sprintf("ping %s with %s %s: %7.3fms (%s)\n",
+					resolver,
+					dns.TypeToString[questionRecord],
+					domain,
+					elapsedMilliSeconds,
+					aurora.Faint(response),
+				),
+			)
 		}
 
 		totalSent++
-
-		// Display results of the ping
-		fmt.Printf(
-			"ping %s with %s %s: %.3fms\n",
-			resolver,
-			dns.TypeToString[questionRecord],
-			domain,
-			elapsedMilliSeconds,
-		)
 
 		time.Sleep(time.Duration(pingInterval) * time.Millisecond)
 	}
@@ -128,10 +148,10 @@ func pinguer(domain string) (int, int) {
 	return totalSent, errors
 }
 
-func dnsExchange(resolver string, message *dns.Msg) error {
+func dnsExchange(resolver string, message *dns.Msg) (string, error) {
 	dnsconn, err := net.Dial("udp", resolver)
 	if err != nil {
-		return err
+		return "", err
 	}
 	co := &dns.Conn{Conn: dnsconn}
 	defer co.Close()
@@ -139,6 +159,14 @@ func dnsExchange(resolver string, message *dns.Msg) error {
 	// Actually send the message and wait for answer
 	co.WriteMsg(message)
 
-	_, err = co.ReadMsg()
-	return err
+	msg, err := co.ReadMsg()
+
+	if err != nil {
+		return "", err
+	}
+
+	for _, rr := range msg.Answer {
+		return rr.(*dns.A).A.String(), nil
+	}
+	return "?", nil
 }
